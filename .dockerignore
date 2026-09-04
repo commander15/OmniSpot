@@ -1,0 +1,50 @@
+# Docker
+.dockerignore
+infra/*
+!infra/docker-entrypoint.sh
+
+# Version control
+.git
+.gitignore
+.gitattributes
+.github
+
+# Laravel environment & encryption keys
+.env
+.env.*
+!.env.example
+storage/*.key
+
+# PHP / Composer dependencies & logs
+vendor/
+.phpunit.result.cache
+.phpunit.cache
+phpdoc/
+auth.json
+
+# Frontend dependencies & local build caches
+node_modules/
+npm-debug.log
+yarn-error.log
+.pnpm-debug.log
+.eslintcache
+.vite
+
+# Laravel runtime directories (ignore local caches & logs, but keep folder structure)
+storage/app/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+storage/logs/*
+bootstrap/cache/*
+
+# Local development files & environments
+.devcontainer
+.vscode
+.idea
+Homestead.json
+Homestead.yaml
+
+# System and OS files
+.DS_Store
+Thumbs.db

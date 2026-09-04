@@ -1,0 +1,41 @@
+server default {
+    listen {
+        type = auth
+        ipaddr = *
+        port = 1812
+    }
+
+    listen {
+        type = acct
+        ipaddr = *
+        port = 1813
+    }
+
+    # Pipeline triggered on incoming RADIUS Access-Request
+    authorize {
+        filter_username
+        preprocess
+        
+        # Trigger rest module HTTP call
+        rest
+        
+        # Force authentication to pass if rest module approves
+        if (updated) {
+            update control {
+                Auth-Type := Accept
+            }
+        }
+    }
+
+    authenticate {
+        # Optional: Handled via authorize section if rest returns success
+        Auth-Type rest {
+            rest
+        }
+    }
+
+    # Pipeline triggered on incoming RADIUS Accounting-Request (Start/Interim/Stop)
+    accounting {
+        rest
+    }
+}

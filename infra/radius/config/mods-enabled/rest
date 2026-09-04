@@ -1,0 +1,27 @@
+rest {
+    # Base URL of your Web Application API
+    connect_uri = "http://load-balancer:80/api/radius"
+
+    # Timeout parameters
+    connect_timeout = 4.0
+    timeout = 10.0
+
+    # 1. Authorize / Authenticate Section
+    authorize {
+        uri = "${..connect_uri}/authorize"
+        method = 'post'
+        body = 'json'
+        
+        # Maps HTTP response codes to FreeRADIUS actions
+        tls {
+            # Disable certificate check if testing locally over HTTP
+        }
+    }
+
+    # 2. Accounting Section
+    accounting {
+        uri = "${..connect_uri}/accounting"
+        method = 'post'
+        body = 'json'
+    }
+}
