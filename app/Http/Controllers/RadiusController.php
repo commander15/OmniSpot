@@ -16,6 +16,10 @@ class RadiusController extends Controller
         $userMac  = $request->input('Calling-Station-Id');
         $routerIp = $request->input('NAS-IP-Address');
 
+        if ($userName == null || $password == null || $userMac == null || $routerIp == null) {
+            return response()->json(['error' => 'Mandatory data field(s) absent(s)'], 403);
+        }
+
         if (!App::isProduction()) {
             Log::info("RADIUS Auth attempt: {$userName} from MAC {$userMac} though router {$routerIp}");
         }
@@ -42,7 +46,7 @@ class RadiusController extends Controller
         // 3. Merge base RADIUS attributes with Vendor attributes
         $responsePayload = array_merge([
             'control:Auth-Type'     => 'Accept',
-            'reply:Session-Timeout' => 3600, // 1 hour max session
+            'reply:Session-Timeout' => $result->remainingSeconds(), // duration limit
             'reply:Idle-Timeout'    => 600,  // 10 mins idle cutoff
         ], $formattedMikrotik);
 
@@ -90,9 +94,9 @@ class RadiusController extends Controller
             return 'Subscription not found';
         }
 
-        // Block expired subscribers
-        if ($subscription->isExpired()) {
-            return 'Subscription expired';
+        // If no bundle linked, we block
+        if ($subscription->bundle == null) {
+            return 'No bundle linked to the subscription';
         }
 
         // Block different MAC
@@ -100,9 +104,14 @@ class RadiusController extends Controller
             return 'Device MAC address didn\'t match the subscription one';
         }
 
-        // If no bundle linked, we block
-        if ($subscription->bundle == null) {
-            return 'No bundle linked to the subscription';
+        // Block expired subscribtions
+        if ($subscription->isExpired()) {
+            return 'Subscription expired';
+        }
+
+        // Block exhausted subscriptions
+        if ($subscription->isExhausted()) {
+            return 'Subscription data exhausted';
         }
 
         // We can allow now

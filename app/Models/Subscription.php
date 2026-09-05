@@ -16,12 +16,22 @@ class Subscription extends Model
     use HasUuids;
 
     public function isExpired(Carbon $now = null): bool {
-        if ($now == null) $now = Carbon::now();
-        return $now->greaterThan($this->expires_at); 
+        return $this->remainingSeconds($now) == 0; 
     }
 
     public function isExhausted(): bool {
         return $this->remainingBytes() == 0;
+    }
+
+    public function remainingSeconds(Carbon $now = null): int {
+        if ($now == null) $now = Carbon::now();
+        
+        // If the expiration time is in the past, return 0 seconds remaining
+        if ($now->greaterThanOrEqualTo($this->expires_at)) {
+            return 0;
+        }
+
+        return $now->diffInSeconds($this->expires_at);
     }
 
     public function remainingBytes(): float | null {
