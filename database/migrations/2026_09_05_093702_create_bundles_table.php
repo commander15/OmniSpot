@@ -1,0 +1,36 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::create('bundles', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            $table->foreignUuid('package_id')->references('packages')->cascadeOnDelete();
+            $table->string('name', 30);
+            $table->decimal('price');
+            $table->string('description', 40);
+            $table->unsignedInteger('up_mbps');
+            $table->unsignedInteger('down_mbps');
+            $table->unsignedInteger('limit_mb')->nullable();
+            $table->unsignedInteger('duration_hours');
+            $table->string('status', 10);
+            $table->timestamps();
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('bundles');
+    }
+};
