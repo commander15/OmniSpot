@@ -21,6 +21,7 @@ class RadiusController extends Controller
         }
 
         if (!App::isProduction()) {
+            Log::info($request->all());
             Log::info("RADIUS Auth attempt: {$userName} from MAC {$userMac} though router {$routerIp}");
         }
 
