@@ -1,6 +1,6 @@
 rest {
     # Base URL of your Web Application API
-    connect_uri = "http://load-balancer:8000/api/radius"
+    connect_uri = "http://api:8000/api/radius"
 
     # Timeout parameters
     connect_timeout = 4.0
