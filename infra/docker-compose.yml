@@ -7,7 +7,7 @@ services:
     build:
       context: ..
       dockerfile: infra/Dockerfile
-    command: php artisan up
+    command: php artisan migrate
     volumes:
       - ./.env:/var/www/.env:rw
       - app-uploads:/var/www/storage/app/public
@@ -22,6 +22,8 @@ services:
     image: omnispot-core:latest
     pull_policy: build
     restart: unless-stopped
+    env_file:
+      - .env
     volumes:
       - app-uploads:/var/www/storage/app/public
       - app-logs:/var/www/storage/logs
@@ -29,11 +31,10 @@ services:
     depends_on:
       core:
         condition: service_completed_successfully
-
-  frontend:
-    container_name: frontend
-    image: nginx:latest
-    restart: unless-stopped
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   load-balancer:
     container_name: load-balancer
@@ -41,28 +42,29 @@ services:
     restart: unless-stopped
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/static:/var/www/public:ro
     ports:
       - "8000:80"
 
   postgres:
     container_name: postgres
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     restart: always
     environment:
-      POSTGRES_DB: radius_app
-      POSTGRES_USER: app_user
-      POSTGRES_PASSWORD: StrongPassword123!
+      POSTGRES_DB: ${DB_DATABASE}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U app_user -d radius_app"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_DATABASE}"]
       interval: 5s
       timeout: 5s
       retries: 5
     
   redis:
     container_name: redis
-    image: redis:7-alpine
+    image: redis:8-alpine
     restart: always
     command: redis-server --save 60 1 --loglevel notice --maxmemory 256mb --maxmemory-policy allkeys-lru
     ports:
@@ -77,7 +79,7 @@ services:
 
   radius:
     container_name: radius
-    image: freeradius/freeradius-server:latest
+    image: freeradius/freeradius-server:3.2.10
     restart: always
     ports:
       - "1812:1812/udp" # RADIUS Authentication
