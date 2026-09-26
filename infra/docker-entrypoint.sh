@@ -15,5 +15,4 @@ php artisan view:cache
 php artisan event:cache
 
 # 3. Hand control over to the container's primary command (e.g., php-fpm)
-echo "Laravel is optimized. Starting application backend..."
 exec "$@"

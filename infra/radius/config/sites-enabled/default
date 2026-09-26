@@ -11,31 +11,42 @@ server default {
         port = 1813
     }
 
-    # Pipeline triggered on incoming RADIUS Access-Request
+    # Processing incoming Access-Request
     authorize {
         filter_username
         preprocess
         
-        # Trigger rest module HTTP call
+        # 1. First try REST API
         rest
         
-        # Force authentication to pass if rest module approves
-        if (updated) {
-            update control {
-                Auth-Type := Accept
-            }
-        }
+        # 2. Local users file fallback (optional testing)
+        # files
+
+        # Enable PAP / Cleartext password verification
+        pap
     }
 
+    # Authentication phase
     authenticate {
-        # Optional: Handled via authorize section if rest returns success
-        Auth-Type rest {
-            rest
+        Auth-Type PAP {
+            pap
         }
     }
 
-    # Pipeline triggered on incoming RADIUS Accounting-Request (Start/Interim/Stop)
+    # Post-Auth (Sends response back to MikroTik)
+    post-auth {
+        # Uncomment if you want REST to log successful logins
+        # rest
+        
+        Post-Auth-Type REJECT {
+            # Log rejected attempts
+            attr_filter.access_reject
+        }
+    }
+
+    # Accounting phase
     accounting {
+        detail
         rest
     }
 }

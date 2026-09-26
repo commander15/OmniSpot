@@ -2,56 +2,68 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Subscription;
+use App\Models\ZoneRouter;
+use App\Services\RadiusService;
+use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class RadiusController extends Controller
 {
+    // Cap unlimited bandwidth to 100 Mbps
+    static private int $unlimitedMbps = 100;
+
+    public function __construct(private RadiusService $radius) {
+    }
+
     public function authorize(Request $request)
     {
-        $userName = $request->input('User-Name');
-        $password = $request->input('User-Password');
-        $userMac  = $request->input('Calling-Station-Id');
-        $routerIp = $request->input('NAS-IP-Address');
+        Log::info($request->getContent()); // Debug only
 
-        if ($userName == null || $password == null || $userMac == null || $routerIp == null) {
-            return response()->json(['error' => 'Mandatory data field(s) absent(s)'], 403);
-        }
+        $data = $this->radiusData($request, [
+            'User-Name' => 'string|required',
+            'User-Password' => 'string|required',
+            'Calling-Station-Id' => 'string|required',
+            'NAS-IP-Address' => 'string|required',
+            'Called-Station-Id' => 'uuid|required:exists:zone_routers,id',
+        ]);
+
+        $calledStationId = $data['Called-Station-Id'];
+        $zoneId = Cache::remember("radius:zone_id:{$calledStationId}", Carbon::now()->addMinutes(30), function() use ($data) {
+            return ZoneRouter::where('id', $data['Called-Station-Id'])->value('zone_id');
+        });
+
+        $userName = $data['User-Name'];
+        $userPassword = $data['User-Password'];
+        $userMac  = $data['Calling-Station-Id'];
+        $routerIp = $data['NAS-IP-Address'];
 
         if (!App::isProduction()) {
-            Log::info($request->all());
             Log::info("RADIUS Auth attempt: {$userName} from MAC {$userMac} though router {$routerIp}");
         }
 
-        $result = $this->authenticate($userName, $password, $userMac, $routerIp);
+        $result = $this->radius->handleAuthentication($userName, $userPassword, $userMac, $routerIp);
         if (is_string($result)) {
-            // Non-2xx response tells FreeRADIUS to issue an Access-Reject
-            return response()->json(['error' => $result], 403);
+            // Tells FreeRADIUS to issue an Access-Reject
+            return $this->radiusResponse([ 'Auth-Type' => 'Reject' ], [ 'Reply-Message' => $result ]);
         }
 
-        $bundle = $result->bundle;
-
-        // 2. Define Vendor-Specific Attributes (VSAs)
-        $mikrotikAttributes = [
-            'Rate-Limit' => "{$bundle->up_mbps}M/{$bundle->down_mbps}M", // Upload/Download rate
-            'Recv-Limit' => $result->remainingBytes(), // Download limit
+        $voucher = $result;
+        $reply = [
+            'Mikrotik-Rate-Limit' => $voucher->speedRates($this->unlimitedMbps), // Upload/Download rate
+            'Session-Timeout' => $voucher->remainingSeconds(),  // duration limit
+            'Idle-Timeout'    => 600,  // 10 mins idle cutoff
         ];
 
-        // Format keys to "reply:Mikrotik-Rate-Limit"
-        $formattedMikrotik = collect($mikrotikAttributes)
-            ->mapWithKeys(fn ($val, $key) => ["reply:Mikrotik-{$key}" => $val])
-            ->toArray();
+        // Data Limit
+        if ($voucher->remaining_bytes != null) {
+            array_push($reply, [ 'Mikrotik-Recv-Limit' => $voucher->remaining_bytes ]);
+        }
 
-        // 3. Merge base RADIUS attributes with Vendor attributes
-        $responsePayload = array_merge([
-            'control:Auth-Type'     => 'Accept',
-            'reply:Session-Timeout' => $result->remainingSeconds(), // duration limit
-            'reply:Idle-Timeout'    => 600,  // 10 mins idle cutoff
-        ], $formattedMikrotik);
-
-        return response()->json($responsePayload, 200);
+        return $this->radiusResponse([ 'Auth-Type' => 'Accept' ], $reply);
     }
 
     public function accounting(Request $request)
@@ -68,82 +80,35 @@ class RadiusController extends Controller
             Log::info("RADIUS Acct [{$statusType}]: {$userName} - Time: {$sessionTime}s - Down: " . round($outputOctets / 1048576, 2) . "MB");
         }
 
+        // ToDo: router identification check here
+
         // Handle session tracking in database / Redis cache
         match ($statusType) {
-            'Start'          => $this->handleSessionStart($sessionId, $userName, $stationId),
-            'Interim-Update' => $this->handleSessionUpdate($sessionId, $sessionTime, $inputOctets, $outputOctets),
-            'Stop'           => $this->handleSessionStop($sessionId, $sessionTime, $inputOctets, $outputOctets),
+            'Start'          => $this->radius->handleSessionStart($sessionId, $userName, $stationId),
+            'Interim-Update' => $this->radius->handleSessionUpdate($sessionId, $userName, $sessionTime, $inputOctets, $outputOctets),
+            'Stop'           => $this->radius->handleSessionStop($sessionId, $userName, $sessionTime, $inputOctets, $outputOctets),
             default          => null,
         };
 
         return response()->json([], 200);
     }
 
-    private function authenticate(string $username, string $password, string $mac, string $routerIp): Subscription | string
-    {
-        // Perform business logic (Check voucher status, user balance, etc.)
+    private function radiusData(Request $request, array $rules): array {
+        // 1. Intercept and flatten all incoming RADIUS array wrappers into plain strings
+        $flattenedData = collect($request->all())->map(function ($item) {
+            if (is_array($item) && isset($item['value'])) {
+                // Extract the first item from the nested value array
+                return data_get($item, 'value.0');
+            }
+            return $item;
+        })->toArray();
 
-        // Find subscription
-        $subscription = Subscription::query()
-            ->with('bundle')
-            ->where('username', $username)
-            ->where('password', $password)
-            ->first();
-
-        // Block if subscription not found
-        if ($subscription == null) {
-            return 'Subscription not found';
-        }
-
-        // If no bundle linked, we block
-        if ($subscription->bundle == null) {
-            return 'No bundle linked to the subscription';
-        }
-
-        // Block different MAC
-        if ($subscription->mac_address != null && $subscription->mac_address != $mac) {
-            return 'Device MAC address didn\'t match the subscription one';
-        }
-
-        // Block expired subscribtions
-        if ($subscription->isExpired()) {
-            return 'Subscription expired';
-        }
-
-        // Block exhausted subscriptions
-        if ($subscription->isExhausted()) {
-            return 'Subscription data exhausted';
-        }
-
-        // We can allow now
-        return $subscription;
+        // 2. Replace the request payload with our cleaned-up, flat data array
+        $request->replace($flattenedData);
+        return $request->validate($rules);
     }
 
-    private function handleSessionStart(string $sessionId, string $userName, ?string $mac): void
-    {
-        // Record active session entry
-        $subscription = Subscription::where('username', $userName)->firstOrFail();
-        $subscription->session_id = $sessionId;
-        $subscription->mac_address = $mac;
-        $subscription->save();
-    }
-
-    private function handleSessionUpdate(string $sessionId, int $duration, int $uploadBytes, int $downloadBytes): void
-    {
-        // Deduct time/data quota or update live session stats
-        // Careful here: better leave for now
-    }
-
-    private function handleSessionStop(string $sessionId, int $duration, int $uploadBytes, int $downloadBytes): void
-    {
-        // Mark session closed and record final data consumption
-        // We find the subcription by sessionId and *increment* to usage (maybe not the first network session)
-        // Duration is irelevant for us cause even when offline, time pass, we have an expiration policy
-
-        $subscription = Subscription::where('session_id', $sessionId)->firstOrFail();
-        $subscription->session_duration = $duration;
-        $subscription->bytes_up += $uploadBytes;
-        $subscription->bytes_down += $downloadBytes;
-        $subscription->save();
+    private function radiusResponse(array $control, array $reply, int $status = 200): JsonResponse {
+        return response()->json([ 'Control' => $control, 'Reply' => $reply, ], $status);
     }
 }

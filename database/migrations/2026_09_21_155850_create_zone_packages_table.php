@@ -11,12 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('packages', function (Blueprint $table) {
-            $table->uuid('id')->primary();
-            $table->foreignId('owner_id')->references('users')->cascadeOnDelete();
-            $table->string('name', 30);
-            $table->string('description', 40);
-            $table->timestamps();
+        Schema::create('zone_packages', function (Blueprint $table) {
+            $table->id();
+            $table->foreignUuid('zone_id')->constrained('zones')->cascadeOnDelete();
+            $table->foreignUuid('package_id')->constrained('internet_packages')->cascadeOnDelete();
         });
     }
 
@@ -25,6 +23,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('packages');
+        Schema::dropIfExists('zone_packages');
     }
 };

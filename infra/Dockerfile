@@ -18,7 +18,7 @@ RUN install-php-extensions bcmath gd zip redis pdo_pgsql pcntl
 # Copy composer files
 COPY composer.json composer.lock ./
 
-# Install dependencies without running Laravel's autoload/scripts 
+# Install dependencies without running Laravel's autoload/scripts
 # (Since the actual app code isn't inside the container yet)
 RUN composer install \
     --no-interaction \
@@ -31,7 +31,7 @@ RUN composer install \
 # Copy the rest of your application code
 COPY . .
 
-# Run composer dump-autoload to generate the final optimized autoloader 
+# Run composer dump-autoload to generate the final optimized autoloader
 # now that the application code is present.
 RUN composer dump-autoload --no-dev --optimize
 
