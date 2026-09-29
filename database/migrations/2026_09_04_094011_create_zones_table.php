@@ -29,6 +29,7 @@ return new class extends Migration
 
             $table->string('name', 30);
             $table->string('net_address', 30);
+            $table->string('wg_address', 30)->nullable();
             $table->string('mac_address', 30)->nullable();
             $table->string('description', 255)->nullable();
 

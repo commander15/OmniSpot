@@ -4,12 +4,15 @@ use App\Http\Controllers\Owner\VoucherController;
 use App\Http\Controllers\Owner\ZoneController;
 use App\Http\Controllers\Public\ZoneController as PublicZoneController;
 use App\Http\Controllers\RadiusController;
+use App\Http\Controllers\Zone\ZoneRouterController;
 use App\Http\Middleware\EnsureRadiusServerOnly;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('/v1')
     ->group(function() {
         Route::apiResource('/owners/{owner_id}/zones', ZoneController::class);
+        Route::apiResource('/owners/{owner_id}/zones/{zone_id}/routers', ZoneRouterController::class);
+        Route::get('/owners/{owner_id}/zones/{zone_id}/routers/{router}/setup-script', [ ZoneRouterController::class, 'generateSetupScript' ]);
         Route::apiResource('/owners/{owner_id}/vouchers', VoucherController::class);
     });
 

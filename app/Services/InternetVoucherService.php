@@ -25,8 +25,8 @@ class InternetVoucherService extends Service
     }
 
     public function generateVoucher(string $phone, Zone $zone, InternetBundle $bundle): InternetVoucher {
-        $username = $this->generateUsername($bundle->short_code, $zone->id);
-        $password = Str::password(6);
+        $username = $this->generateUsername($bundle->short_code, $zone->id, 8); // 8 characters
+        $password = Str::password(6); // 6 characters
         $voucher = $this->makeVoucher($username, $password, $phone, true, $bundle, $zone);
         $voucher->saveOrFail();
         return $voucher;
@@ -67,10 +67,11 @@ class InternetVoucherService extends Service
      * @param string $prefix   The exact un-modified bundle prefix (e.g., "24H")
      * @param string $zoneUuid The unique Wi-Fi Zone ID to isolate counters per zone
      */
-    public static function generateUsername(string $prefix, string $zoneUuid): string
+    public static function generateUsername(string $prefix, string $zoneUuid, int $length): string
     {
-        if (strlen($prefix) !== 3) {
-            throw new InvalidArgumentException("Prefix must be exactly 3 characters.");
+        $prefixLength = strlen($prefix);
+        if ($prefixLength < 1 || $prefixLength > 3) {
+            throw new InvalidArgumentException("Prefix must be between 1 and 3 characters.");
         }
 
         // 1. Incorporate the current year into the key so the counter auto-resets every year
@@ -88,8 +89,8 @@ class InternetVoucherService extends Service
         // 3. Scramble the sequential index so vouchers look random to customers
         $scrambledId = ($voucherIndex * self::COPRIME_SCRAMBLER) % self::MAX_COMBINATIONS;
 
-        // 4. Convert to a 4-character Base62 string
-        $suffix = self::toBase62($scrambledId, 4);
+        // 4. Convert to a Base62 string
+        $suffix = self::toBase62($scrambledId, $length - $prefixLength);
 
         return $prefix . $suffix;
     }
