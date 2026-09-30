@@ -156,10 +156,12 @@ class LabSeeder extends Seeder
 
         foreach ($routers as $router) {
             $zone->routers()->updateOrCreate(
-                ['name' => $router['name']],
+                ['name' => $router['name'], 'zone_id' => $zone->id],
                 ['net_address' => $router['net_address'], 'mac_address' => $router['mac_address'], 'description' => $router['description']]
             );
         }
+
+        $this->command->info("Zone({$zone->name}): created with ID: {$zone->id}");
 
         return $zone;
     }

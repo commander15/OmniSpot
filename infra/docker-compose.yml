@@ -46,6 +46,7 @@ services:
 
   scheduler:
     image: omnispot-core:latest
+    pull_policy: build
     restart: unless-stopped
     command: php artisan schedule:work
     env_file:
@@ -68,6 +69,7 @@ services:
 
   queue:
     image: omnispot-core:latest
+    pull_policy: build
     restart: unless-stopped
     command: php artisan queue:work
     env_file:
@@ -99,6 +101,8 @@ services:
       - postgres-data:/var/lib/postgresql
     networks:
       - omni-net
+    ports:
+      - "5432:5432"
     deploy:
       resources:
         limits:
@@ -117,6 +121,8 @@ services:
       - redis-data:/data
     networks:
       - omni-net
+    ports:
+      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -141,8 +147,7 @@ services:
       - ./radius/config/mods-enabled/rest:/etc/freeradius/mods-enabled/rest:ro
       - ./radius/config/sites-enabled/default:/etc/freeradius/sites-enabled/default:ro
       - ./radius/dictionary:/etc/freeradius/dictionary:ro
-    networks:
-      - omni-net
+    network_mode: host
     deploy:
       resources:
         limits:

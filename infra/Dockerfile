@@ -1,50 +1,25 @@
-FROM php:8.5-cli-alpine
+FROM commander15/laravel:13-cli
 
-# Set the working directory inside the container
-WORKDIR /var/www
+# Temporarly switching to root
+USER root
 
-# Install core system tools needed for running the container
-RUN apk add --no-cache bash curl zip unzip git
+# Install the exact extensions
+RUN install-php-extensions pdo_pgsql redis
 
-# Download the script to automatically install and configure PHP extensions
-ADD --chmod=0755 https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions /usr/local/bin/
+# Switching back to laravel user
+USER laravel
 
-# Copy Composer from its official image
-COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+# Installing dependecies
+COPY --chown=laravel:laravel composer.json composer.lock ./
 
-# Install the exact extensions you requested
-RUN install-php-extensions bcmath gd zip redis pdo_pgsql pcntl
+# Installing composer dependencies
+RUN composer-install
 
-# Copy composer files
-COPY composer.json composer.lock ./
+# Copying application files
+COPY --chown=laravel:laravel . .
 
-# Install dependencies without running Laravel's autoload/scripts
-# (Since the actual app code isn't inside the container yet)
-RUN composer install \
-    --no-interaction \
-    --no-plugins \
-    --no-scripts \
-    --no-dev \
-    --prefer-dist \
-    --no-autoloader
+# Optimizing dependencies and caching
+RUN composer-optimize
 
-# Copy the rest of your application code
-COPY . .
-
-# Run composer dump-autoload to generate the final optimized autoloader
-# now that the application code is present.
-RUN composer dump-autoload --no-dev --optimize
-
-# Set correct permissions for Laravel's writable directories
-RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
-
-# Set Entry Point
-COPY infra/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
-ENTRYPOINT ["docker-entrypoint.sh"]
-
-# Expose port 8000 (artisan serve) and port 8080 (Laravel Reverb)
-EXPOSE 8000 8080
-
-# Bind to 0.0.0.0 so the server can accept requests from outside the container
-CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
+# Running server
+CMD ["php", "artisan", "serve", "--host", "0.0.0.0"]

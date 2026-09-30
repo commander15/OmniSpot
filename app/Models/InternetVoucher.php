@@ -26,7 +26,7 @@ class InternetVoucher extends Model
     }
 
     public function isExhausted(): bool {
-        return $this->remaining_bytes <= 0;
+        return $this->remaining_bytes && $this->remaining_bytes <= 0;
     }
 
     public function hasSessionWithMac(string $mac): bool {
@@ -37,9 +37,9 @@ class InternetVoucher extends Model
         return $this->sessions->find('mac_address', $mac);
     }
 
-    public function remainingSessionCount(): int {
+    public function remainingSessionCount(int $unlimitedSession = 100): int {
         $sessions = $this->sessions;
-        $count = $this->session_count - $sessions->count();
+        $count = ($this->session_count ?? $unlimitedSession) - $sessions->count();
         return ($count <= 0 ? 0 : $count);
     }
 
@@ -79,6 +79,14 @@ class InternetVoucher extends Model
             $this->remaining_bytes = 0;
 
         return $this->save();
+    }
+
+    public function owner(): BelongsTo {
+        return $this->belongsTo(User::class, 'owner_id');
+    }
+
+    public function zone(): BelongsTo {
+        return $this->belongsTo(Zone::class);
     }
 
     public function bundle(): BelongsTo {
