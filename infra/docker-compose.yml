@@ -1,15 +1,15 @@
 name: OmniSpot
 
 services:
-  load-balancer:
-    image: nginx:latest
+  proxy:
+    image: commander15/proxoid:latest
     restart: unless-stopped
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ${HTTP_ROOT:-./nginx/static}:/var/www/public:ro
+      - ./nginx/clusters.conf:/etc/nginx/clusters.conf:ro
+      - ./nginx/endpoints.conf:/etc/nginx/endpoints.conf:ro
+      - proxy-state:/etc/nginx/state
     ports:
       - "${HTTP_PORT:-80}:80"
-      - "${HTTPS_PORT:-443}:443"
     networks:
       - omni-net
     deploy:
@@ -29,8 +29,8 @@ services:
       - ./.env
       - ./laravel/.env
     volumes:
-      - app-uploads:/var/www/storage/app/public
-      - app-logs:/var/www/storage/logs
+      - api-uploads:/var/www/storage/app/public
+      - api-logs:/var/www/storage/logs
     networks:
       - omni-net
     deploy:
@@ -52,8 +52,8 @@ services:
       - ./.env
       - ./laravel/.env
     volumes:
-      - app-uploads:/var/www/storage/app/public
-      - app-logs:/var/www/storage/logs
+      - api-uploads:/var/www/storage/app/public
+      - api-logs:/var/www/storage/logs
     networks:
       - omni-net
     deploy:
@@ -74,8 +74,8 @@ services:
       - ./.env
       - ./laravel/.env
     volumes:
-      - app-uploads:/var/www/storage/app/public
-      - app-logs:/var/www/storage/logs
+      - api-uploads:/var/www/storage/app/public
+      - api-logs:/var/www/storage/logs
     networks:
       - omni-net
     deploy:
@@ -135,7 +135,7 @@ services:
     ports:
       - "${RADIUS_HOST:-0.0.0.0}:${RADIUS_AUTH:-1812}:1812/udp" # RADIUS Authentication
       - "${RADIUS_HOST:-0.0.0.0}:${RADIUS_ACCT:-1813}:1813/udp" # RADIUS Accounting
-      - "${RADSEC_PORT:-2083}:2083/tcp" # RadSec
+      - "${RADSEC_HOST:-0.0.0.0}:${RADSEC_PORT:-2083}:2083/tcp" # RadSec
     volumes:
       - ./radius/config/clients.conf:/etc/freeradius/clients.conf:ro
       - ./radius/config/mods-enabled/rest:/etc/freeradius/mods-enabled/rest:ro
@@ -147,10 +147,14 @@ services:
       resources:
         limits:
           memory: 256m
+    depends_on:
+      api:
+        condition: service_started
 
 volumes:
-  app-uploads:
-  app-logs:
+  proxy-state:
+  api-uploads:
+  api-logs:
   postgres-data:
   redis-data:
 
